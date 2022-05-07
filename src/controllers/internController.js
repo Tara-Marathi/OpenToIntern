@@ -1,23 +1,57 @@
-const internModel = require("../models/internModel");// import internModel
-const collegeModel = require("../models/collegeModel");//Import collegeModel
+const internModel = require("../models/internModel");
+const collegeModel = require("../models/collegeModel");
 
-//create intern function
+const isValidRequestBody = function (requestBody) {
+    return Object.keys(requestBody).length > 0;
+  };
+
+const isValid = function (value) {
+    if (typeof value === "undefined" || value === null) return false;
+    if (typeof value === "string" && value.trim().length === 0) return false;
+    return true;
+  };
+
+
 const createIntern = async function (req, res) {
     try {
         //Reading input from req.body
         const requestBody = req.body;
-
-        const errors = await validateIntern(requestBody);
-        if (errors.length > 0) {
-            return res.status(400).send({ status: false, msg: "Mandatory fields are missing", errors: errors });
-        }
+  
+        if (!isValidRequestBody(requestBody)) {
+            return res.status(400).send({
+              status: false,
+              message: "Invalid request parameter, please provide required Details",
+            });
+          }
         //assigning values to multiple variables
         const { name, email, mobile, collegeName } = requestBody;
 
+        if (!isValid(name)) {
+            return res.status(400).send({ status: false, message: " name required" });
+        }
+
+        if (!isValid(email)) {
+            return res.status(400).send({ status: false, message: " email required" });
+        }
+
+        if (!isValid(mobile)) {
+            return res.status(400).send({ status: false, message: " mobile required" });
+        }
+
+        if (!isValid(collegeName)) {
+            return res.status(400).send({ status: false, message: " collegeName required" });
+        }
+        
         // check email is valid or not
         const isValidEmail = /^\w+([\.-]?\w+)@\w+([\.-]?\w+)(\.\w{2,3})+$/.test(email);
         if (!isValidEmail) {
             return res.status(400).send({ status: false, msg: "Invalid email address" })
+        }
+
+        // check email is already used
+        const isEmailUsed = await internModel.findOne({ email });
+        if (isEmailUsed) {
+            return res.status(400).send({ status: false, msg: `${email} email address is already registered` })
         }
 
         //check mobile number is valid or not
@@ -32,18 +66,13 @@ const createIntern = async function (req, res) {
             return res.status(400).send({ status: false, msg: `${mobile} mobile number is already registered` })
         }
 
-        // check email is already used
-        const isEmailUsed = await internModel.findOne({ email });
-        if (isEmailUsed) {
-            return res.status(400).send({ status: false, msg: `${email} email address is already registered` })
-        }
-
         //find college with given college name
         const college = await collegeModel.findOne({ name: collegeName });
         if (!college) {
             return res.status(404).send({ status: false, msg: "college not found" })
         }
         const collegeId = college._id
+
         //check collegeid is valid objectid
         const isValidCollegeId = /^(?=[a-f\d]{24}$)(\d+[a-f]|[a-f]+\d)/.test(collegeId);
         if (!isValidCollegeId) {
@@ -62,61 +91,4 @@ const createIntern = async function (req, res) {
     }
 }
 
-const validateIntern = async function (internData) {
-    const errors = [];
-    //assigning values to multiple variables
-    const { name, email, mobile, collegeName } = internData   //destructuring internData object
-
-    //Mandotory fields
-    if (!name || name.trim().length === 0) {
-        errors.push("name required")
-    }
-    if (!email || email.trim().length === 0) {
-        errors.push("email required")
-    }
-    if (!mobile) {
-        errors.push("mobile number required")
-    }
-    if (!collegeName || collegeName.trim().length === 0) {
-        errors.push("collegeName required")
-    }
-    return errors;
-}
-
-//get college details for the requested college
-const getCollegeDetails = async function (req, res) {
-    try{
-        //Reading input from query param
-        const data = req.query;
-
-        //Reading collegename from query param
-        const collegeName = data.collegeName;
-
-        if (!collegeName || collegeName.trim().length === 0) {
-            return res.status(400).send({ status: false, msg: "collegename required" })
-        }
-
-        // find college with given collegeName
-        const collegeDetails = await collegeModel.findOne({ name: collegeName });
-        // console.log(collegeDetails)
-        if (!collegeDetails) {
-            return res.status(404).send({ status: false, message: `${collegeName} college not found`})
-        }
-        //assigning values to multiple variables
-        const { name, fullName, logoLink, _id } = collegeDetails; // destructuring
-
-        //find documents for interests in given college using _id
-        const interests = await internModel.find({ collegeId:_id, isDeleted:false}).select({_id:1, name:1, email:1, mobile:1});
-
-        const internDetails = { name, fullName, logoLink, interests }
-
-        return res.status(200).send({ status: true, data: internDetails })
-    }
-    catch(error){
-        return res.status(500).send({status:false,msg:error.message})
-    }
-}
-
-//export function
 module.exports.createIntern = createIntern;
-module.exports.getCollegeDetails = getCollegeDetails;

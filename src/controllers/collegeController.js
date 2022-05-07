@@ -1,20 +1,47 @@
-const collegeModel = require("../models/collegeModel");//Import collegeModel
+const collegeModel = require("../models/collegeModel");
+const internModel = require("../models/internModel");
 
-// create college
+const isValidRequestBody = function (requestBody) {
+    return Object.keys(requestBody).length > 0;
+  };
+
+const isValid = function (value) {
+    if (typeof value === "undefined" || value === null) return false;
+    if (typeof value === "string" && value.trim().length === 0) return false;
+    return true;
+  };
+
+
 const createCollege = async function(req, res) {
-        //using try catch block function
+        
     try{
         //Reading inputs from the body
         const collegeData = req.body;
+      
+        if (!isValidRequestBody(collegeData)) {
+            return res.status(400).send({
+              status: false,
+              message: "Invalid request parameter, please provide required Details",
+            });
+          }
 
-        //validate college
-        const errors = await validateCollege(collegeData);
-        if(errors.length > 0) {
-            return res.status(400).send({status: false, msg:"Mandatory fields are missing", errors:errors});
+        //assigning values to multiple variables
+        const { name, fullName, logoLink } = collegeData;
+
+        if (!isValid(name)) {
+            return res.status(400).send({ status: false, message: "name required" });
+        }
+
+        if (!isValid(fullName)) {
+            return res.status(400).send({ status: false, message: "fullname required" });
+        }
+
+        if (!isValid(logoLink)) {
+            return res.status(400).send({ status: false, message: "logolink required" });
         }
 
         // validate Url
-        const validUrl = /(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-/]))?/.test(collegeData.logoLink);
+        const validUrl = /(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-/]))?/.test(logoLink);
         if(!validUrl) {
             return res.status(400).send({status: false, msg: "Invalid Url"})  
         }
@@ -23,38 +50,57 @@ const createCollege = async function(req, res) {
         const isNameUsed = await collegeModel.findOne({name:collegeData.name});
         if(isNameUsed)
         {
-            return res.status(400).send({status:false,msg:`document for ${collegeData.name} college is already created`})
+            return res.status(400).send({status:false,msg:`document for ${name} college is already created`})
         }
 
         //create college
         const college = await collegeModel.create(collegeData);
 
         //send created college in response
-        res.status(201).send({status: true, data: college})
+        return res.status(201).send({status: true, data: college})
 
     }catch(error){
         // return a error if any case fail on try block 
-        res.status(500).send({status: false, msg: error.message})
+        return res.status(500).send({status: false, msg: error.message})
     }
 }
 
-const validateCollege = async function(collegeData){
-    const errors = [];
 
-    const { name, fullName, logoLink} = collegeData //Destructuring collegeData objects
+//get college details for the requested college
+const getCollegeDetails = async function (req, res) {
+    try{
+       
+        //Reading collegename from query param
+        const collegeName =  req.query.collegeName;
 
-    //Mandatory fields
-    if (!name || name.trim().length===0) {
-        errors.push("name required")
+        if (!collegeName || collegeName.trim().length === 0) {
+            return res.status(400).send({ status: false, msg: "collegename required" })
+        }
+
+        // find college with given collegeName
+        const collegeDetails = await collegeModel.findOne({ name: collegeName, isDeleted:false });
+        
+        if (!collegeDetails) {
+            return res.status(404).send({ status: false, message: `${collegeName} college not found`})
+        }
+
+        //assigning values to multiple variables
+        const { name, fullName, logoLink, _id } = collegeDetails; // destructuring
+
+        //find documents for interests in given college using _id
+        const interests = await internModel.find({ collegeId:_id, isDeleted:false}).select({name:1, email:1, mobile:1});
+
+        const internDetails = { name, fullName, logoLink, interests }
+
+        return res.status(200).send({ status: true, data: internDetails })
     }
-    if (!fullName || fullName.trim().length===0) {
-        errors.push("fullName required")
+    catch(error){
+        return res.status(500).send({status:false,msg:error.message})
     }
-    if (!logoLink) {
-        errors.push("link required")
-    }
-    return errors;
 }
 
-//Export function
+//export function
 module.exports.createCollege = createCollege;
+module.exports.getCollegeDetails = getCollegeDetails;
+
+
